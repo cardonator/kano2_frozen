@@ -6,6 +6,7 @@ A simple, easy-to-use library to control the Kano Frozen 2 Motion Sensor Kit via
 
 - **[web/](web/)**: JavaScript library and Web Bluetooth Demo (Chrome/Edge).
 - **[python/](python/)**: Python library (Bleak) for Desktop/Raspberry Pi.
+- **[PROTOCOL.md](docs/PROTOCOL.md)**: Technical details of the BLE protocol on this device.
 
 ## Quick Start
 
