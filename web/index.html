@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kano Frozen 2 Web Controller</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        #status {
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            background: #16213e;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+            margin: 20px auto;
+            display: block;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            background: #0f3460;
+            color: white;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #e94560;
+        }
+
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+        }
+
+        #log {
+            font-family: monospace;
+            color: #00ff88;
+            min-height: 24px;
+            margin-top: 10px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>❄️ Kano Frozen 2 Controller ❄️</h1>
+    <div id="status">Disconnected</div>
+
+    <canvas id="deviceCanvas" width="400" height="400"></canvas>
+
+    <div id="log">Waiting for connection...</div>
+
+    <div class="controls">
+        <button id="btnConnect">Connect Device</button>
+        <button id="btnDisconnect" disabled>Disconnect</button>
+    </div>
+    <div class="controls">
+        <button onclick="setEffect('forcefield')">Force Field</button>
+        <button onclick="setEffect('rainbow')">Rainbow Loop</button>
+        <button onclick="setEffect('off')">Turn Off</button>
+    </div>
+
+    <script src="kano_frozen2.js"></script>
+    <script>
+        // --- UI & VISUALIZATION ---
+        const kano = new KanoFrozen2();
+        const logDiv = document.getElementById('log');
+        const canvas = document.getElementById('deviceCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentEffect = 'forcefield';
+
+        // LED Mapping for Visualization
+        const LED_POSITIONS = [
+            { x: 0.3, y: -0.8 },  // 0: N-Right
+            { x: 0.8, y: -0.3 }, // 1: E-Top
+            { x: 0.8, y: 0.3 },  // 2: E-Bottom
+            { x: 0.3, y: 0.8 },  // 3: S-Right
+            { x: -0.3, y: 0.8 }, // 4: S-Left
+            { x: -0.8, y: 0.3 }, // 5: W-Bottom
+            { x: -0.8, y: -0.3 },// 6: W-Top
+            { x: -0.3, y: -0.8 },   // 7: N-Left
+            { x: 0, y: 0 }       // 8: Center
+        ];
+
+        // --- BLUETOOTH EVENTS ---
+        document.getElementById('btnConnect').addEventListener('click', async () => {
+            try {
+                logDiv.innerText = "Scanning...";
+                await kano.connect();
+            } catch (error) {
+                let msg = "Error: " + error.message;
+                if (error.message.includes("GATT Server is disconnected")) {
+                    msg += " (Try checking battery or moving closer)";
+                }
+                logDiv.innerText = msg;
+            }
+        });
+
+        document.getElementById('btnDisconnect').addEventListener('click', async () => {
+            await kano.disconnect();
+        });
+
+        kano.on('connect', (name) => {
+            document.getElementById('status').innerText = "Connected to " + name;
+            document.getElementById('btnConnect').disabled = true;
+            document.getElementById('btnDisconnect').disabled = false;
+            logDiv.innerText = "Ready! Wave your hand.";
+            requestAnimationFrame(updateLoop);
+        });
+
+        kano.on('disconnect', () => {
+            document.getElementById('status').innerText = "Disconnected";
+            document.getElementById('btnConnect').disabled = false;
+            document.getElementById('btnDisconnect').disabled = true;
+        });
+
+        kano.on('gesture', (direction) => {
+            logDiv.innerText = `>>> SWIPE ${direction} <<<`;
+            flashCenter();
+        });
+
+        kano.on('sensor', (data) => {
+            if (currentEffect === 'forcefield') {
+                updateForceField(data.brightness[0], data.brightness[1], data.brightness[2], data.brightness[3], data.maxBrightness);
+            }
+        });
+
+        // --- EFFECTS ---
+        function setEffect(name) {
+            currentEffect = name;
+            if (name === 'off') kano.setAllLeds(0, 0, 0);
+        }
+
+        function updateForceField(n, e, s, w, maxB) {
+            // N=Red, E=Green, S=Blue, W=Yellow
+            // Indices: N=[7,0], E=[1,2], S=[3,4], W=[5,6]
+            kano.setLed(7, n, 0, 0); kano.setLed(0, n, 0, 0);
+            kano.setLed(1, 0, e, 0); kano.setLed(2, 0, e, 0);
+            kano.setLed(3, 0, 0, s); kano.setLed(4, 0, 0, s);
+            kano.setLed(5, w, w, 0); kano.setLed(6, w, w, 0);
+            kano.setLed(8, maxB, maxB, maxB);
+        }
+
+        function flashCenter() {
+            kano.setLed(8, 255, 255, 255);
+        }
+
+        let hue = 0;
+        function runRainbow() {
+            hue = (hue + 2) % 360;
+            const [r, g, b] = hsvToRgb(hue / 360, 1, 1);
+            kano.setAllLeds(r, g, b);
+        }
+
+        function hsvToRgb(h, s, v) {
+            let r, g, b, i, f, p, q, t;
+            i = Math.floor(h * 6); f = h * 6 - i; p = v * (1 - s); q = v * (1 - f * s); t = v * (1 - (1 - f) * s);
+            switch (i % 6) {
+                case 0: r = v, g = t, b = p; break;
+                case 1: r = q, g = v, b = p; break;
+                case 2: r = p, g = v, b = t; break;
+                case 3: r = p, g = q, b = v; break;
+                case 4: r = t, g = p, b = v; break;
+                case 5: r = v, g = p, b = q; break;
+            }
+            return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+        }
+
+        // --- LOOP ---
+        let lastLedUpdate = 0;
+        async function updateLoop() {
+            if (!kano.isConnected) return;
+
+            drawCanvas();
+
+            const now = Date.now();
+            if (now - lastLedUpdate > 25) {
+                if (currentEffect === 'rainbow') runRainbow();
+                await kano.sendLeds();
+                lastLedUpdate = now;
+            }
+            requestAnimationFrame(updateLoop);
+        }
+
+        function drawCanvas() {
+            ctx.clearRect(0, 0, 400, 400);
+            const cx = 200, cy = 200, r = 150;
+
+            // Draw Labels
+            ctx.fillStyle = "#333";
+            ctx.font = "20px Arial";
+            ctx.fillText("N", 195, 40);
+            ctx.fillText("S", 195, 380);
+            ctx.fillText("W", 20, 205);
+            ctx.fillText("E", 370, 205);
+
+            // Draw LEDs
+            for (let i = 0; i < 9; i++) {
+                const pos = LED_POSITIONS[i];
+                const [red, green, blue] = kano.getLed(i);
+
+                let lx = cx, ly = cy;
+                if (i < 8) {
+                    lx = cx + (pos.x * r);
+                    ly = cy + (pos.y * r);
+                }
+
+                ctx.beginPath();
+                ctx.arc(lx, ly, 15, 0, Math.PI * 2);
+                ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+                ctx.fill();
+                ctx.strokeStyle = "#fff";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+    </script>
+</body>
+
+</html>

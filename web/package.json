@@ -1,0 +1,18 @@
+{
+    "name": "kano-frozen2-web",
+    "version": "1.0.0",
+    "description": "Web Bluetooth library for Kano Frozen 2 Coding Kit",
+    "main": "kano_frozen2.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "kano",
+        "frozen2",
+        "web-bluetooth",
+        "ble",
+        "iot"
+    ],
+    "author": "",
+    "license": "MIT"
+}
